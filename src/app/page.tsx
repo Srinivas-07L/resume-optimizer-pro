@@ -8,7 +8,6 @@ import {
   ArrowRight, 
   Download, 
   CheckCircle2, 
-  AlertCircle,
   Loader2,
   Briefcase
 } from 'lucide-react';
@@ -84,7 +83,6 @@ export default function Home() {
     if (!result) return;
     const doc = new jsPDF();
     
-    // Simple PDF Generation
     doc.setFontSize(20);
     doc.text(result.name, 20, 20);
     
@@ -111,15 +109,20 @@ export default function Home() {
     doc.save(`${result.name.replace(/\s+/g, '_')}_Optimized.pdf`);
   };
 
+  // Modern Glassmorphism & Gradient classes
+  const glassClass = "bg-white/5 backdrop-blur-xl border border-white/10";
+  const gradientText = "bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 via-violet-400 to-purple-400";
+  const btnPrimary = "px-8 py-4 rounded-xl font-bold bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 transition-all shadow-lg shadow-indigo-500/20 active:scale-95 text-white";
+
   return (
-    <div className="min-h-screen p-8 md:p-24">
+    <div className="min-h-screen p-8 md:p-24 bg-[#0a0a0c] text-[#f8fafc]">
       {/* Header */}
       <div className="max-w-4xl mx-auto text-center mb-16">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-sm font-medium mb-6">
           <Sparkles className="w-4 h-4" />
           Powered by Gemini 1.5 Flash
         </div>
-        <h1 className="text-5xl md:text-7xl font-bold mb-6 gradient-text">
+        <h1 className={cn("text-5xl md:text-7xl font-bold mb-6", gradientText)}>
           Resume AI Optimizer
         </h1>
         <p className="text-slate-400 text-xl max-w-2xl mx-auto">
@@ -129,9 +132,8 @@ export default function Home() {
 
       {/* Main App */}
       <div className="max-w-6xl mx-auto grid md:grid-cols-2 gap-8">
-        {/* Left Side: Inputs */}
         <div className="space-y-6">
-          <div className="glass p-8 rounded-3xl space-y-6">
+          <div className={cn("p-8 rounded-3xl space-y-6", glassClass)}>
             <div className="flex items-center gap-3 mb-2">
               <div className="w-10 h-10 rounded-xl bg-indigo-500/20 flex items-center justify-center text-indigo-400">
                 <Upload className="w-5 h-5" />
@@ -146,24 +148,16 @@ export default function Home() {
                 file ? "border-emerald-500/50 bg-emerald-500/5" : "border-slate-800 hover:border-indigo-500/50 hover:bg-indigo-500/5"
               )}
             >
-              <input 
-                type="file" 
-                ref={fileInputRef}
-                onChange={handleFileChange}
-                accept=".pdf"
-                className="hidden" 
-              />
+              <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".pdf" className="hidden" />
               {file ? (
                 <>
                   <CheckCircle2 className="w-10 h-10 text-emerald-500 mb-2" />
                   <p className="font-medium text-emerald-400">{file.name}</p>
-                  <p className="text-xs text-slate-500">Click to change</p>
                 </>
               ) : (
                 <>
-                  <FileText className="w-10 h-10 text-slate-600 mb-2 group-hover:text-indigo-400 group-hover:scale-110 transition-all" />
+                  <FileText className="w-10 h-10 text-slate-600 mb-2 group-hover:text-indigo-400" />
                   <p className="text-slate-400">Drop your PDF or click to browse</p>
-                  <p className="text-xs text-slate-600">Max file size: 5MB</p>
                 </>
               )}
             </div>
@@ -179,77 +173,48 @@ export default function Home() {
               value={jd}
               onChange={(e) => setJd(e.target.value)}
               placeholder="Paste the job description here..."
-              className="w-full h-48 bg-white/5 border border-slate-800 rounded-2xl p-4 text-slate-300 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-500/50 transition-all resize-none"
+              className="w-full h-48 bg-white/5 border border-slate-800 rounded-2xl p-4 text-slate-300 focus:ring-2 focus:ring-violet-500/50 transition-all resize-none"
             />
 
             <div className="flex items-center justify-between pt-4">
               <label className="flex items-center gap-3 cursor-pointer group">
-                <div className="relative">
-                  <input 
-                    type="checkbox" 
-                    checked={forceOnePage}
-                    onChange={(e) => setForceOnePage(e.target.checked)}
-                    className="sr-only peer" 
-                  />
-                  <div className="w-11 h-6 bg-slate-800 rounded-full peer peer-checked:bg-indigo-600 transition-all"></div>
-                  <div className="absolute left-1 top-1 w-4 h-4 bg-slate-400 rounded-full peer-checked:left-6 peer-checked:bg-white transition-all"></div>
-                </div>
-                <span className="text-sm font-medium text-slate-400 group-hover:text-slate-200 transition-colors">Force 1-Page Layout</span>
+                <input type="checkbox" checked={forceOnePage} onChange={(e) => setForceOnePage(e.target.checked)} className="sr-only peer" />
+                <div className="w-11 h-6 bg-slate-800 rounded-full peer peer-checked:bg-indigo-600 transition-all"></div>
+                <span className="text-sm font-medium text-slate-400 group-hover:text-slate-200">Force 1-Page Layout</span>
               </label>
 
-              <button 
-                onClick={handleOptimize}
-                disabled={loading || !file || !jd}
-                className="btn-primary disabled:opacity-50 disabled:scale-100 flex items-center gap-2"
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    Optimizing...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-5 h-5" />
-                    Optimize Now
-                  </>
-                )}
+              <button onClick={handleOptimize} disabled={loading || !file || !jd} className={btnPrimary}>
+                {loading ? "Optimizing..." : "Optimize Now"}
               </button>
             </div>
           </div>
         </div>
 
-        {/* Right Side: Results */}
         <div className="relative">
           {loading && (
-            <div className="absolute inset-0 z-10 glass rounded-3xl flex flex-col items-center justify-center text-center p-8 animate-in fade-in duration-500">
+            <div className={cn("absolute inset-0 z-10 rounded-3xl flex flex-col items-center justify-center text-center p-8", glassClass)}>
               <Loader2 className="w-12 h-12 text-indigo-500 animate-spin mb-4" />
               <p className="text-xl font-semibold mb-2">{status}</p>
-              <p className="text-slate-500">Our AI is rewriting your bullet points and mirroring keywords...</p>
             </div>
           )}
 
           {!result && !loading && (
-            <div className="h-full glass rounded-3xl border-dashed flex flex-col items-center justify-center text-center p-12 text-slate-600">
+            <div className={cn("h-full rounded-3xl border-dashed flex flex-col items-center justify-center text-center p-12 text-slate-600", glassClass)}>
               <Sparkles className="w-16 h-16 mb-4 opacity-10" />
               <p className="text-lg">Your optimized resume will appear here</p>
-              <p className="text-sm">Upload your files to start the transformation</p>
             </div>
           )}
 
           {result && (
-            <div className="glass rounded-3xl p-8 space-y-8 animate-in slide-in-from-bottom-8 duration-700">
+            <div className={cn("rounded-3xl p-8 space-y-8 animate-in slide-in-from-bottom-8 duration-700", glassClass)}>
               <div className="flex items-center justify-between">
                 <h3 className="text-2xl font-bold">Optimization Results</h3>
-                <button 
-                  onClick={downloadPdf}
-                  className="flex items-center gap-2 text-indigo-400 hover:text-indigo-300 font-semibold"
-                >
+                <button onClick={downloadPdf} className="flex items-center gap-2 text-indigo-400 hover:text-indigo-300 font-semibold">
                   <Download className="w-5 h-5" />
                   Download PDF
                 </button>
               </div>
 
-              {/* Match Score */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="p-4 rounded-2xl bg-white/5 border border-white/5">
                   <p className="text-sm text-slate-500 mb-1">Original Match</p>
@@ -261,9 +226,8 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Keywords Added */}
               <div>
-                <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-3">Keywords Mirrored</h4>
+                <h4 className="text-sm font-semibold text-slate-500 uppercase mb-3">Keywords Mirrored</h4>
                 <div className="flex flex-wrap gap-2">
                   {result.keywords_added.map((kw, i) => (
                     <span key={i} className="px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs font-medium">
@@ -273,27 +237,14 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Preview */}
               <div className="p-6 rounded-2xl bg-white/5 border border-white/5 space-y-4">
-                <div className="flex items-center gap-2 text-slate-400">
-                  <FileText className="w-4 h-4" />
-                  <span className="text-sm font-medium">Resume Preview</span>
-                </div>
                 <h4 className="text-xl font-bold">{result.name}</h4>
                 <p className="text-sm text-slate-400 leading-relaxed">{result.summary}</p>
-                <div className="pt-4 border-t border-white/5">
-                  <p className="text-xs text-slate-600 uppercase tracking-widest font-bold">Recent Experience</p>
-                  <p className="text-sm text-slate-400 mt-2 font-medium">{result.experience[0]?.role} at {result.experience[0]?.company}</p>
-                </div>
               </div>
             </div>
           )}
         </div>
       </div>
-
-      <footer className="max-w-4xl mx-auto text-center mt-16 text-slate-600 text-sm">
-        <p>© 2024 Resume AI Optimizer. Single-column, ATS-friendly layouts guaranteed.</p>
-      </footer>
     </div>
   );
 }
