@@ -6,18 +6,27 @@ import * as pdfjs from "npm:pdfjs-serverless@0.5.0";
 
 const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 
-const SYSTEM_PROMPT = `You are a Senior Technical Recruiter and ATS optimization expert. Rewrite the user's resume to score 95%+ on ATS systems for the provided Job Description.
+function buildSystemPrompt(forceOnePage: boolean) {
+  return `You are a Senior Technical Recruiter and ATS optimization expert. Rewrite the user's resume to score 95%+ on ATS systems for the provided Job Description.
 
 HARD RULES:
 - Domain agnostic (VLSI, Full Stack, Mechanical, Finance, etc.). Identify exact technical verbs and nouns in the JD.
-- KEYWORD MIRRORING: Use the EXACT strings from the JD. If JD says "Object-Oriented Programming", never write "OOP". If JD says "RTL Design", never write "Logic Design". Mirror EDA tools (Vivado, Quartus, Altium, Cadence, Synopsys), frameworks, languages exactly as written.
+- KEYWORD MIRRORING: Use the EXACT strings from the JD. If JD says "Object-Oriented Programming", never write "OOP". Mirror tools, frameworks, languages exactly as written.
 - Google XYZ / STAR formula for EVERY bullet: "Accomplished [X] as measured by [Y], by doing [Z]." Quantify with numbers/percentages/timeframes.
 - 95% RULE: Remove ALL fluff ("passionate", "team player", "hardworking", "detail-oriented"). Only hard skills and quantified metrics.
 - Standard sections only: Summary, Skills, Experience, Education (and Projects/Certifications if present in source).
 - Single column, plain text. NO tables, NO icons, NO columns.
 - Preserve truth: do not invent employers, dates, or degrees. You may rephrase and quantify reasonably from context.
 
+SMART LENGTH LOGIC:
+${forceOnePage
+  ? `- USER FORCED 1-PAGE MODE. Be RUTHLESS. Target ~480-580 words TOTAL. Drop oldest/least-relevant jobs entirely. Keep 3-4 bullets per recent role, 2 for older. Trim summary to 2-3 lines. Set page_target = 1.`
+  : `- DEFAULT TO 1 PAGE. Target ~480-580 words. Be ruthless: cut older/less-relevant experience to keep strongest content on page one.
+- ONLY expand to 2 pages (~900-1100 words) if the JD explicitly requires 3+ years experience OR has extreme volume of complex technical requirements that cannot be summarized without dropping below a 90% match. Set page_target accordingly (1 or 2).`}
+- Set the "page_target" field to 1 or 2 based on this logic. Set "length_decision_reason" with a one-line justification.
+
 Return STRICT JSON via the tool call only.`;
+}
 
 const tool = {
   type: "function",
