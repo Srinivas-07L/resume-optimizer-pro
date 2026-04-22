@@ -6,43 +6,35 @@ export async function POST(req: NextRequest) {
   try {
     const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
     if (!GEMINI_API_KEY) {
-      return NextResponse.json({ error: 'GEMINI_API_KEY is not configured in Vercel' }, { status: 500 });
+      return NextResponse.json({ error: 'GEMINI_API_KEY missing' }, { status: 500 });
     }
 
     const formData = await req.formData();
     const jd = formData.get('jd') as string;
     const file = formData.get('resume') as File;
-    const forceOnePage = formData.get('forceOnePage') === 'true';
 
-    if (!jd || !file) {
-      return NextResponse.json({ error: 'Missing Job Description or Resume file' }, { status: 400 });
-    }
+    if (!jd || !file) return NextResponse.json({ error: 'Missing JD or Resume' }, { status: 400 });
 
     const arrayBuffer = await file.arrayBuffer();
-    const b64 = Buffer.from(arrayBuffer).toString('base64');
+    const b64 = btoa(Array.from(new Uint8Array(arrayBuffer)).map(b => String.fromCharCode(b)).join(''));
 
-    // Use a very strict prompt for JSON instead of the response_mime_type field
     const prompt = `You are an expert ATS optimizer. Review the resume PDF and this JD: "${jd}".
-    
-    CRITICAL: You must return ONLY a raw JSON object. Do not include markdown formatting like \`\`\`json.
-    
-    JSON SCHEMA:
+    Return ONLY a raw JSON object. SCHEMA:
     {
-      "name": "Full Name",
-      "summary": "Professional summary...",
+      "name": "Name",
+      "summary": "Summary",
       "experience": [{"role": "Role", "company": "Company", "dates": "Dates", "description": ["bullets"]}],
-      "education": [{"degree": "Degree", "school": "School", "dates": "Dates"}],
-      "skills": ["Skill 1"],
+      "education": [],
+      "skills": [],
       "match_score_before": 0,
       "match_score_after": 100,
-      "keywords_added": ["list"]
+      "keywords_added": []
     }`;
 
-    // SMART SCANNER: Try multiple combinations without the problematic response_mime_type field
+    // Target multiple versions but with NO problematic mime_type fields
     const targets = [
       { ver: "v1beta", mod: "gemini-1.5-flash" },
-      { ver: "v1", mod: "gemini-1.5-flash" },
-      { ver: "v1beta", mod: "gemini-1.5-pro" }
+      { ver: "v1", mod: "gemini-1.5-flash" }
     ];
 
     let lastError = "";
@@ -66,18 +58,13 @@ export async function POST(req: NextRequest) {
       lastError = await response.text();
     }
 
-    if (!successData) {
-      return NextResponse.json({ error: `AI Scan Failed: ${lastError}` }, { status: 500 });
-    }
+    if (!successData) return NextResponse.json({ error: `AI Error: ${lastError}` }, { status: 500 });
 
-    let resultText = successData.candidates?.[0]?.content?.parts?.[0]?.text;
-    
-    // Clean up markdown if the AI ignored the instruction
-    if (resultText.includes('```')) {
-      resultText = resultText.replace(/```json/g, '').replace(/```/g, '').trim();
-    }
+    let text = successData.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    // Clean up any markdown code blocks
+    text = text.replace(/```json/g, "").replace(/```/g, "").trim();
 
-    return NextResponse.json(JSON.parse(resultText));
+    return NextResponse.json(JSON.parse(text));
 
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
