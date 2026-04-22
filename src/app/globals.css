@@ -20,7 +20,7 @@ body {
 
 @layer components {
   .glass {
-    @apply bg-opacity-10 bg-white backdrop-blur-lg border border-white/10;
+    @apply bg-white/10 backdrop-blur-lg border border-white/10;
   }
   
   .gradient-text {
