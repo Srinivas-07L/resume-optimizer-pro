@@ -96,6 +96,8 @@ const tool = {
         },
         certifications: { type: "array", items: { type: "string" } },
         company_name: { type: "string", description: "Best guess of target company name from JD; empty if unknown" },
+        page_target: { type: "number", description: "1 or 2" },
+        length_decision_reason: { type: "string" },
         match_score_before: { type: "number", description: "0-100 ATS match of ORIGINAL resume vs JD" },
         match_score_after: { type: "number", description: "0-100 ATS match of REWRITTEN resume vs JD (target 95+)" },
         keywords_added: { type: "array", items: { type: "string" } },
