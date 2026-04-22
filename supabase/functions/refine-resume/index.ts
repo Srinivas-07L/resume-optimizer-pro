@@ -210,7 +210,7 @@ Deno.serve(async (req) => {
       body: JSON.stringify({
         model: "openai/gpt-5",
         messages: [
-          { role: "system", content: SYSTEM_PROMPT },
+          { role: "system", content: buildSystemPrompt(forceOnePage) },
           {
             role: "user",
             content: `JOB DESCRIPTION:\n${jd}\n\n---\nORIGINAL RESUME TEXT:\n${resumeText}`,
