@@ -180,6 +180,7 @@ Deno.serve(async (req) => {
 
     const form = await req.formData();
     const jd = String(form.get("jd") || "").trim();
+    const forceOnePage = String(form.get("force_one_page") || "false") === "true";
     const file = form.get("resume") as File | null;
     if (!jd) return json({ error: "Job description required" }, 400);
     if (!file) return json({ error: "Resume PDF required" }, 400);
