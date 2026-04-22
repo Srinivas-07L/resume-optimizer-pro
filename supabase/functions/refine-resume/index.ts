@@ -107,14 +107,58 @@ const tool = {
 };
 
 async function extractPdfText(bytes: Uint8Array): Promise<string> {
-  const doc = await (pdfjs as any).getDocument({ data: bytes, useSystemFonts: true }).promise;
-  let text = "";
-  for (let i = 1; i <= doc.numPages; i++) {
-    const page = await doc.getPage(i);
-    const content = await page.getTextContent();
-    text += content.items.map((it: any) => it.str).join(" ") + "\n";
+  try {
+    const doc = await (pdfjs as any).getDocument({ data: bytes, useSystemFonts: true }).promise;
+    let text = "";
+    for (let i = 1; i <= doc.numPages; i++) {
+      const page = await doc.getPage(i);
+      const content = await page.getTextContent();
+      text += content.items.map((it: any) => it.str).join(" ") + "\n";
+    }
+    return text;
+  } catch (e) {
+    console.error("pdfjs extract failed", e);
+    return "";
   }
-  return text;
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
+async function extractWithVision(bytes: Uint8Array): Promise<string> {
+  const b64 = bytesToBase64(bytes);
+  const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${LOVABLE_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "google/gemini-2.5-flash",
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "Extract ALL text verbatim from this resume PDF. Preserve sections, bullets, dates, companies, contact info. Return only the raw extracted text." },
+            { type: "file", file: { filename: "resume.pdf", file_data: `data:application/pdf;base64,${b64}` } },
+          ],
+        },
+      ],
+    }),
+  });
+  if (!res.ok) {
+    const t = await res.text();
+    console.error("Vision extract failed", res.status, t);
+    throw new Error("Vision extract failed");
+  }
+  const data = await res.json();
+  return data.choices?.[0]?.message?.content ?? "";
 }
 
 Deno.serve(async (req) => {
@@ -130,15 +174,19 @@ Deno.serve(async (req) => {
     if (!file) return json({ error: "Resume PDF required" }, 400);
 
     const buf = new Uint8Array(await file.arrayBuffer());
-    let resumeText = "";
-    try {
-      resumeText = await extractPdfText(buf);
-    } catch (e) {
-      console.error("PDF parse failed", e);
-      return json({ error: "Could not read PDF. Make sure it's a text-based PDF (not a scan)." }, 400);
+    let resumeText = await extractPdfText(buf);
+
+    const looksGood = resumeText.trim().length >= 200 && (resumeText.match(/[a-zA-Z]/g) || []).length >= 100;
+    if (!looksGood) {
+      console.log("Native extract weak, falling back to vision OCR");
+      try {
+        resumeText = await extractWithVision(buf);
+      } catch {
+        return json({ error: "Could not read PDF (text extraction and OCR both failed)." }, 400);
+      }
     }
     if (resumeText.trim().length < 50) {
-      return json({ error: "Resume text too short. PDF may be image-based / scanned." }, 400);
+      return json({ error: "Resume text too short or unreadable." }, 400);
     }
 
     const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
