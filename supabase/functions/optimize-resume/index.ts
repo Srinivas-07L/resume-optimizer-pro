@@ -12,14 +12,40 @@ Deno.serve(async (req) => {
     console.log("Optimize-Resume: Invoked");
     if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is missing in Supabase Secrets");
 
-    const form = await req.formData();
-    const jd = String(form.get("jd") || "");
-    const file = form.get("resume") as File | null;
-    const forceOnePage = String(form.get("force_one_page") || "false") === "true";
+    let jd = "";
+    let b64 = "";
+    let forceOnePage = false;
 
-    if (!jd || !file) return json({ error: "Job description and Resume PDF are required." }, 400);
+    // FLEXIBLE PARSING: Support FormData AND JSON
+    const contentType = req.headers.get("content-type") || "";
+    if (contentType.includes("multipart/form-data")) {
+      try {
+        const form = await req.formData();
+        jd = String(form.get("jd") || "");
+        forceOnePage = String(form.get("force_one_page") || "false") === "true";
+        const file = form.get("resume") as File | null;
+        if (file) {
+          b64 = btoa(String.fromCharCode(...new Uint8Array(await file.arrayBuffer())));
+        }
+      } catch (e) {
+        console.error("FormData error, trying JSON fallback...");
+        // If formData fails, we fall through to JSON check
+      }
+    }
 
-    const b64 = btoa(String.fromCharCode(...new Uint8Array(await file.arrayBuffer())));
+    if (!b64) {
+      try {
+        const body = await req.json();
+        jd = body.jd || jd;
+        forceOnePage = !!body.force_one_page || forceOnePage;
+        b64 = body.resume_b64 || "";
+      } catch (e) {
+        console.error("JSON parsing also failed or was not provided.");
+      }
+    }
+
+    if (!jd) throw new Error("Job description is missing.");
+    if (!b64) throw new Error("Resume PDF data is missing (tried Form and JSON).");
 
     const prompt = `You are a Senior Recruiter. Optimize this resume for the following Job Description.
     JD: ${jd}
@@ -59,7 +85,7 @@ Deno.serve(async (req) => {
 
   } catch (e) {
     console.error("Optimize-Resume Error:", e.message);
-    return json({ error: e.message }, 500);
+    return json({ error: e.message, debug_info: "Flexible Parsing Mode" }, 500);
   }
 });
 
