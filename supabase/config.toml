@@ -1,5 +1,0 @@
-project_id = "wqpwocmhenicoxxqkhws"
-[functions.optimize-resume]
-verify_jwt = false
-[functions.optimize-cover-letter]
-verify_jwt = false
