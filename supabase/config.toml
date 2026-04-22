@@ -1,4 +1,5 @@
 project_id = "okhghjdqdytekacwbgpd"
-
 [functions.refine-resume]
+verify_jwt = false
+[functions.refine-cover-letter]
 verify_jwt = false

@@ -6,52 +6,46 @@ import { corsHeaders } from "https://esm.sh/@supabase/supabase-js@2.95.0/cors";
 // @ts-ignore
 import * as pdfjs from "npm:pdfjs-serverless@0.5.0";
 
-const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
 
-const SYSTEM_PROMPT = `You are an elite career coach performing IN-PLACE editing of a cover letter PDF.
+const SYSTEM_PROMPT = `You are an elite Career Coach and In-Place Editor.
+Your task is to tailor a cover letter to a specific Job Description (JD) while preserving the original layout, tone, and character length.
 
-YOU DO NOT REWRITE THE LETTER. You return a small list of EXACT find/replace edits that swap only:
-- The company name (every occurrence)
-- The date (if outdated)
-- 2-5 short "tailoring" sentences or phrases that mention the OLD company, OLD role, or generic claims that should mirror keywords from the NEW JD.
+RULES:
+1. DO NOT REWRITE: Only identify 3-8 key "swap points" (find/replace pairs).
+2. EXACT MATCH: The 'find' string MUST be a verbatim substring of the original text.
+3. CHARACTER PARITY: The 'replace' string must be within ±10% of the length of the 'find' string to avoid layout shifts.
+4. KEYWORD MIRRORING: Swap generic or outdated company names, dates, and 2-3 impact sentences with JD-specific keywords.
+5. NO INVENTIONS: Do not add skills or experiences that aren't in the original.
 
-HARD RULES:
-- "find" MUST be an EXACT substring of the original letter text (verbatim, including punctuation and case). If it's not exact, the swap will fail.
-- "replace" MUST have approximately the same character length (±15%) as "find" so the layout/wrapping stays identical.
-- Never invent metrics, employers, or experiences not present in the original.
-- Mirror EXACT keywords from the JD where applicable.
-- Preserve the user's voice, tone, and sentence rhythm.
-- Return 3-8 edits MAX. Quality over quantity.
-- ATS-friendly plain text only.`;
+Return the edits via the 'emit_edits' tool call.`;
 
 const tool = {
-  type: "function",
-  function: {
+  function_declarations: [{
     name: "emit_edits",
     description: "Emit targeted in-place edits for the cover letter PDF",
     parameters: {
-      type: "object",
+      type: "OBJECT",
       properties: {
-        company_name: { type: "string", description: "Target company from JD; empty if unknown" },
+        company_name: { type: "STRING", description: "Target company name from JD" },
         edits: {
-          type: "array",
-          description: "Find/replace pairs. 'find' must be verbatim from the original.",
+          type: "ARRAY",
+          description: "Find/replace pairs",
           items: {
-            type: "object",
+            type: "OBJECT",
             properties: {
-              find: { type: "string", description: "Exact substring from the original letter" },
-              replace: { type: "string", description: "Replacement, similar length to find" },
-              reason: { type: "string", description: "Short justification" },
+              find: { type: "STRING", description: "Verbatim substring from original" },
+              replace: { type: "STRING", description: "Tailored replacement (similar length)" },
+              reason: { type: "STRING", description: "Why this change helps ATS/matching" },
             },
             required: ["find", "replace"],
           },
         },
-        keywords_added: { type: "array", items: { type: "string" } },
+        keywords_added: { type: "ARRAY", items: { type: "STRING" } },
       },
       required: ["edits"],
-      additionalProperties: false,
     },
-  },
+  }],
 };
 
 async function extractPdfText(bytes: Uint8Array): Promise<string> {
@@ -81,34 +75,27 @@ function bytesToBase64(bytes: Uint8Array): string {
 
 async function extractWithVision(bytes: Uint8Array): Promise<string> {
   const b64 = bytesToBase64(bytes);
-  const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${LOVABLE_API_KEY}`,
-      "Content-Type": "application/json",
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: "google/gemini-2.5-flash",
-      messages: [
-        {
-          role: "user",
-          content: [
-            { type: "text", text: "Extract ALL text verbatim from this cover letter PDF. Preserve punctuation and casing exactly. Return only the raw text." },
-            { type: "file", file: { filename: "letter.pdf", file_data: `data:application/pdf;base64,${b64}` } },
-          ],
-        },
-      ],
+      contents: [{
+        parts: [
+          { text: "Extract ALL text verbatim from this cover letter PDF. Preserve punctuation and casing exactly. Return only the raw text." },
+          { inline_data: { mime_type: "application/pdf", data: b64 } }
+        ]
+      }]
     }),
   });
   if (!res.ok) throw new Error("Vision extract failed");
   const data = await res.json();
-  return data.choices?.[0]?.message?.content ?? "";
+  return data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
 }
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
+    if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY not configured");
 
     const form = await req.formData();
     const jd = String(form.get("jd") || "").trim();
@@ -129,38 +116,29 @@ Deno.serve(async (req) => {
     }
     if (letterText.trim().length < 50) return json({ error: "Letter text too short or unreadable." }, 400);
 
-    const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const aiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "openai/gpt-5",
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          {
-            role: "user",
-            content: `TARGET JOB DESCRIPTION:\n${jd}\n\n---\nORIGINAL COVER LETTER TEXT (verbatim — your "find" strings MUST be exact substrings of this):\n${letterText}`,
-          },
+        contents: [
+          { role: "user", parts: [{ text: `SYSTEM INSTRUCTIONS:\n${SYSTEM_PROMPT}\n\nTARGET JOB DESCRIPTION:\n${jd}\n\n---\nORIGINAL COVER LETTER TEXT (verbatim):\n${letterText}` }] }
         ],
-        tools: [tool],
-        tool_choice: { type: "function", function: { name: "emit_edits" } },
+        tools: [{ function_declarations: tool.function_declarations }],
+        tool_config: { function_calling_config: { mode: "ANY", allowed_function_names: ["emit_edits"] } }
       }),
     });
 
     if (!aiRes.ok) {
-      if (aiRes.status === 429) return json({ error: "Rate limit exceeded. Please retry shortly." }, 429);
-      if (aiRes.status === 402) return json({ error: "AI credits exhausted. Add credits in Settings → Workspace → Usage." }, 402);
       const t = await aiRes.text();
-      console.error("AI error", aiRes.status, t);
-      return json({ error: "AI gateway error" }, 500);
+      console.error("Gemini error", aiRes.status, t);
+      return json({ error: "Gemini AI error" }, 500);
     }
 
     const data = await aiRes.json();
-    const call = data.choices?.[0]?.message?.tool_calls?.[0];
+    const call = data.candidates?.[0]?.content?.parts?.find((p: any) => p.functionCall)?.functionCall;
+    
     if (!call) return json({ error: "AI returned no structured output" }, 500);
-    const parsed = JSON.parse(call.function.arguments);
+    const parsed = call.args;
 
     // Filter edits to only those that actually exist verbatim in the letter
     const validEdits = (parsed.edits || []).filter((e: any) =>
@@ -185,3 +163,4 @@ function json(body: unknown, status = 200) {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 }
+
