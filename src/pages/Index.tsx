@@ -113,7 +113,7 @@ const Index = () => {
       fd.append("jd", jd);
       fd.append("resume", file);
       fd.append("force_one_page", String(forceOnePage));
-      const { data, error } = await supabase.functions.invoke("refine-resume", { body: fd });
+      const { data, error } = await supabase.functions.invoke("optimize-resume", { body: fd });
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
       setResult((data as any).resume);
@@ -156,7 +156,7 @@ const Index = () => {
       const fd = new FormData();
       fd.append("jd", letterJd);
       fd.append("letter", letterFile);
-      const { data, error } = await supabase.functions.invoke("refine-cover-letter", { body: fd });
+      const { data, error } = await supabase.functions.invoke("optimize-cover-letter", { body: fd });
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
       const lr = data as LetterResult;

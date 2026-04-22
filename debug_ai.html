@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AI Debugger</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; line-height: 1.5; }
+        #log { white-space: pre-wrap; background: #f4f4f4; padding: 10px; border: 1px solid #ccc; margin-top: 10px; }
+        .error { color: red; }
+        .success { color: green; }
+    </style>
+</head>
+<body>
+    <h1>Edge Function Debugger</h1>
+    <p>Testing connection to: <code>wqpwocmhenicoxxqkhws</code></p>
+    
+    <button id="testBtn">Test refine-resume Function</button>
+    <div id="log">Click the button to start test...</div>
+
+    <script>
+        const projectRef = "wqpwocmhenicoxxqkhws";
+        const anonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndxcHdvY21oZW5pY294eHFraHdzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MzkyNTQsImV4cCI6MjA5MjQxNTI1NH0.zlzVds8jli6tX7dRZ8YMnoJJUldFENjXEfH_DWBC2GI";
+        const url = `https://${projectRef}.supabase.co/functions/v1/refine-resume`;
+
+        const log = (msg, isError = false) => {
+            const div = document.getElementById('log');
+            div.innerHTML += `<div class="${isError ? 'error' : 'success'}">[${new Date().toLocaleTimeString()}] ${msg}</div>`;
+        };
+
+        document.getElementById('testBtn').addEventListener('click', async () => {
+            log("Starting test...");
+            
+            try {
+                // Create a dummy PDF buffer (100 bytes)
+                const dummyPdf = new Uint8Array(100).fill(0);
+                const blob = new Blob([dummyPdf], { type: 'application/pdf' });
+                
+                const fd = new FormData();
+                fd.append('jd', 'Test Job Description for Software Engineer');
+                fd.append('resume', blob, 'test.pdf');
+
+                log(`Calling URL: ${url}`);
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${anonKey}`,
+                        'apikey': anonKey
+                    },
+                    body: fd
+                });
+
+                log(`Status: ${res.status} ${res.statusText}`);
+                const data = await res.json();
+                
+                if (res.ok) {
+                    log("SUCCESS! The function is working perfectly.");
+                    log("AI Response: " + JSON.stringify(data).substring(0, 200) + "...");
+                } else {
+                    log(`FAILED: ${JSON.stringify(data)}`, true);
+                }
+            } catch (e) {
+                log(`CRITICAL FETCH ERROR: ${e.message}`, true);
+                log("Check your internet connection or if the project ref is correct.", true);
+            }
+        });
+    </script>
+</body>
+</html>

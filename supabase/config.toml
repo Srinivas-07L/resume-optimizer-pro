@@ -1,5 +1,5 @@
 project_id = "wqpwocmhenicoxxqkhws"
-[functions.refine-resume]
+[functions.optimize-resume]
 verify_jwt = false
-[functions.refine-cover-letter]
+[functions.optimize-cover-letter]
 verify_jwt = false
