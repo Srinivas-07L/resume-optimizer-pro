@@ -19,7 +19,7 @@
     <script>
         const projectRef = "wqpwocmhenicoxxqkhws";
         const anonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndxcHdvY21oZW5pY294eHFraHdzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MzkyNTQsImV4cCI6MjA5MjQxNTI1NH0.zlzVds8jli6tX7dRZ8YMnoJJUldFENjXEfH_DWBC2GI";
-        const url = `https://${projectRef}.supabase.co/functions/v1/refine-resume`;
+        const url = `https://${projectRef}.supabase.co/functions/v1/optimize-resume`;
 
         const log = (msg, isError = false) => {
             const div = document.getElementById('log');
@@ -30,8 +30,10 @@
             log("Starting test...");
             
             try {
-                // Create a dummy PDF buffer (100 bytes)
-                const dummyPdf = new Uint8Array(100).fill(0);
+                // Create a dummy PDF with valid magic bytes
+                const dummyPdf = new Uint8Array(100);
+                const header = "%PDF-1.4\n%âãÏÓ\n";
+                for (let i = 0; i < header.length; i++) dummyPdf[i] = header.charCodeAt(i);
                 const blob = new Blob([dummyPdf], { type: 'application/pdf' });
                 
                 const fd = new FormData();
