@@ -21,24 +21,28 @@ export async function POST(req: NextRequest) {
     const arrayBuffer = await file.arrayBuffer();
     const b64 = Buffer.from(arrayBuffer).toString('base64');
 
+    // Use a very strict prompt for JSON instead of the response_mime_type field
     const prompt = `You are an expert ATS optimizer. Review the resume PDF and this JD: "${jd}".
-    Return ONLY a valid JSON object in this format:
+    
+    CRITICAL: You must return ONLY a raw JSON object. Do not include markdown formatting like \`\`\`json.
+    
+    JSON SCHEMA:
     {
-      "name": "Name",
-      "summary": "Summary",
+      "name": "Full Name",
+      "summary": "Professional summary...",
       "experience": [{"role": "Role", "company": "Company", "dates": "Dates", "description": ["bullets"]}],
-      "education": [],
-      "skills": [],
+      "education": [{"degree": "Degree", "school": "School", "dates": "Dates"}],
+      "skills": ["Skill 1"],
       "match_score_before": 0,
       "match_score_after": 100,
-      "keywords_added": []
+      "keywords_added": ["list"]
     }`;
 
-    // SMART SCANNER: Try multiple combinations
+    // SMART SCANNER: Try multiple combinations without the problematic response_mime_type field
     const targets = [
-      { ver: "v1", mod: "gemini-1.5-flash" },
       { ver: "v1beta", mod: "gemini-1.5-flash" },
-      { ver: "v1", mod: "gemini-1.5-pro" }
+      { ver: "v1", mod: "gemini-1.5-flash" },
+      { ver: "v1beta", mod: "gemini-1.5-pro" }
     ];
 
     let lastError = "";
@@ -51,8 +55,7 @@ export async function POST(req: NextRequest) {
         body: JSON.stringify({
           contents: [{
             parts: [{ text: prompt }, { inline_data: { mime_type: 'application/pdf', data: b64 } }]
-          }],
-          generationConfig: { response_mime_type: "application/json" }
+          }]
         })
       });
 
@@ -67,7 +70,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `AI Scan Failed: ${lastError}` }, { status: 500 });
     }
 
-    const resultText = successData.candidates?.[0]?.content?.parts?.[0]?.text;
+    let resultText = successData.candidates?.[0]?.content?.parts?.[0]?.text;
+    
+    // Clean up markdown if the AI ignored the instruction
+    if (resultText.includes('```')) {
+      resultText = resultText.replace(/```json/g, '').replace(/```/g, '').trim();
+    }
+
     return NextResponse.json(JSON.parse(resultText));
 
   } catch (error: any) {
