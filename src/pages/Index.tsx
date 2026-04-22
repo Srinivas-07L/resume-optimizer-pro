@@ -5,10 +5,11 @@ import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { downloadResumePdf, type ResumeData } from "@/lib/resume-pdf";
-import { downloadCoverLetterPdf, type CoverLetterData } from "@/lib/cover-letter-pdf";
+import { applyEditsToPdf, downloadEditedLetter, type Edit } from "@/lib/cover-letter-overlay";
 import { MatchScoreRing } from "@/components/MatchScoreRing";
 import { FileText, Upload, Sparkles, Download, CheckCircle2, ArrowRight, Mail } from "lucide-react";
 
@@ -21,20 +22,31 @@ type ResumeResult = ResumeData & {
   keywords_missing_in_original?: string[];
 };
 
+type LetterResult = {
+  company_name?: string;
+  edits: Edit[];
+  keywords_added?: string[];
+  original_text?: string;
+};
+
 const Index = () => {
   // Resume tab state
   const [jd, setJd] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [forceOnePage, setForceOnePage] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [progressLabel, setProgressLabel] = useState("");
   const [result, setResult] = useState<ResumeResult | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // Cover letter tab state
-  const [baseLetter, setBaseLetter] = useState("");
+  // Cover letter tab state — now PDF upload
+  const [letterFile, setLetterFile] = useState<File | null>(null);
   const [letterJd, setLetterJd] = useState("");
   const [letterLoading, setLetterLoading] = useState(false);
-  const [letterResult, setLetterResult] = useState<(CoverLetterData & { keywords_added?: string[] }) | null>(null);
+  const [letterResult, setLetterResult] = useState<LetterResult | null>(null);
+  const [editedLetterBytes, setEditedLetterBytes] = useState<Uint8Array | null>(null);
+  const letterFileRef = useRef<HTMLInputElement>(null);
 
   const { toast } = useToast();
 
@@ -51,6 +63,37 @@ const Index = () => {
     setFile(f);
   };
 
+  const onLetterFile = (f: File | null) => {
+    if (!f) return;
+    if (f.type !== "application/pdf") {
+      toast({ title: "PDF only", description: "Please upload a .pdf cover letter.", variant: "destructive" });
+      return;
+    }
+    if (f.size > 10 * 1024 * 1024) {
+      toast({ title: "File too large", description: "Max 10 MB.", variant: "destructive" });
+      return;
+    }
+    setLetterFile(f);
+  };
+
+  const runProgress = (label: string) => {
+    setProgressLabel(label);
+    setProgress(8);
+    let p = 8;
+    const id = setInterval(() => {
+      p = Math.min(92, p + Math.random() * 12);
+      setProgress(p);
+    }, 450);
+    return () => {
+      clearInterval(id);
+      setProgress(100);
+      setTimeout(() => {
+        setProgress(0);
+        setProgressLabel("");
+      }, 400);
+    };
+  };
+
   const handleSubmit = async () => {
     if (!jd.trim() || jd.trim().length < 50) {
       toast({ title: "Job description too short", description: "Paste the full JD (min 50 chars).", variant: "destructive" });
@@ -62,6 +105,9 @@ const Index = () => {
     }
     setLoading(true);
     setResult(null);
+    const stop = runProgress(
+      forceOnePage ? "Re-engineering PDF Layout…" : "Mirroring keywords · scoring ATS match…",
+    );
     try {
       const fd = new FormData();
       fd.append("jd", jd);
@@ -79,6 +125,7 @@ const Index = () => {
         variant: "destructive",
       });
     } finally {
+      stop();
       setLoading(false);
     }
   };
@@ -93,8 +140,8 @@ const Index = () => {
   };
 
   const handleLetterSubmit = async () => {
-    if (!baseLetter.trim() || baseLetter.trim().length < 50) {
-      toast({ title: "Base letter too short", description: "Paste your full base cover letter (min 50 chars).", variant: "destructive" });
+    if (!letterFile) {
+      toast({ title: "Cover letter required", description: "Upload your current cover letter PDF.", variant: "destructive" });
       return;
     }
     if (!letterJd.trim() || letterJd.trim().length < 50) {
@@ -103,14 +150,27 @@ const Index = () => {
     }
     setLetterLoading(true);
     setLetterResult(null);
+    setEditedLetterBytes(null);
+    const stop = runProgress("Locating swap points · preserving original layout…");
     try {
-      const { data, error } = await supabase.functions.invoke("refine-cover-letter", {
-        body: { base_letter: baseLetter, jd: letterJd },
-      });
+      const fd = new FormData();
+      fd.append("jd", letterJd);
+      fd.append("letter", letterFile);
+      const { data, error } = await supabase.functions.invoke("refine-cover-letter", { body: fd });
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
-      setLetterResult((data as any).letter);
-      toast({ title: "Cover letter tailored", description: "Format & voice preserved." });
+      const lr = data as LetterResult;
+      setLetterResult(lr);
+
+      // Apply edits in-place to the original PDF
+      const originalBytes = new Uint8Array(await letterFile.arrayBuffer());
+      const edited = await applyEditsToPdf(originalBytes, lr.edits || []);
+      setEditedLetterBytes(edited);
+
+      toast({
+        title: "Cover letter tailored",
+        description: `${(lr.edits || []).length} in-place edits applied. Original layout preserved.`,
+      });
     } catch (e: any) {
       toast({
         title: "Could not tailor letter",
@@ -118,8 +178,17 @@ const Index = () => {
         variant: "destructive",
       });
     } finally {
+      stop();
       setLetterLoading(false);
     }
+  };
+
+  const handleDownloadLetter = () => {
+    if (!editedLetterBytes || !letterFile) return;
+    const safe = (s: string) => (s || "").replace(/[^\w\-]+/g, "_").replace(/^_+|_+$/g, "");
+    const company = safe(letterResult?.company_name || "Tailored");
+    const base = safe(letterFile.name.replace(/\.pdf$/i, "")) || "CoverLetter";
+    downloadEditedLetter(editedLetterBytes, `${base}_${company}.pdf`);
   };
 
   return (
@@ -136,7 +205,7 @@ const Index = () => {
             <span className="bg-gradient-accent bg-clip-text text-transparent">Land the interview.</span>
           </h1>
           <p className="mt-6 max-w-2xl text-lg opacity-80 md:text-xl">
-            ATS-optimized resumes and tailored cover letters — keyword-mirrored, single-column, text-searchable.
+            ATS-optimized resumes and in-place edited cover letters — your layout, your voice, JD-mirrored keywords.
           </p>
         </div>
       </header>
@@ -216,7 +285,7 @@ const Index = () => {
                       Force 1-Page Resume
                     </Label>
                     <p className="text-xs text-muted-foreground">
-                      Overrides smart length; ruthlessly trims older roles.
+                      Auto-shrinks font, tightens line-height, trims oldest bullets.
                     </p>
                   </div>
                   <Switch
@@ -251,16 +320,13 @@ const Index = () => {
               </Button>
             </div>
 
-            {loading && (
-              <Card className="mt-10 animate-pulse p-8">
-                <div className="flex flex-col items-center gap-4">
-                  <div className="h-3 w-48 rounded bg-muted" />
-                  <div className="h-3 w-64 rounded bg-muted" />
-                  <div className="h-3 w-40 rounded bg-muted" />
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    Mirroring keywords · rewriting in STAR/XYZ · scoring ATS match…
-                  </p>
+            {progress > 0 && (
+              <Card className="mt-6 p-5">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-medium">{progressLabel}</span>
+                  <span className="text-muted-foreground">{Math.round(progress)}%</span>
                 </div>
+                <Progress value={progress} className="mt-3" />
               </Card>
             )}
 
@@ -280,7 +346,8 @@ const Index = () => {
                 {(result.page_target || result.length_decision_reason) && (
                   <div className="mt-6 rounded-lg border border-border bg-secondary/40 p-4 text-sm">
                     <span className="font-semibold">Length: </span>
-                    {result.page_target || 1} page{(result.page_target || 1) > 1 ? "s" : ""}
+                    {forceOnePage ? 1 : result.page_target || 1} page
+                    {(forceOnePage ? 1 : result.page_target || 1) > 1 ? "s" : ""}
                     {result.length_decision_reason && (
                       <span className="text-muted-foreground"> — {result.length_decision_reason}</span>
                     )}
@@ -317,7 +384,7 @@ const Index = () => {
                 <div className="mt-8 flex justify-center">
                   <Button
                     size="lg"
-                    onClick={() => downloadResumePdf(result)}
+                    onClick={() => downloadResumePdf(result, forceOnePage)}
                     className="bg-primary text-primary-foreground hover:bg-primary/90"
                   >
                     <Download className="h-4 w-4" />
@@ -334,16 +401,43 @@ const Index = () => {
               <Card className="p-6 shadow-elegant">
                 <div className="mb-3 flex items-center gap-2">
                   <Mail className="h-5 w-5 text-accent" />
-                  <h2 className="text-lg font-semibold">Base Cover Letter</h2>
+                  <h2 className="text-lg font-semibold">Base Cover Letter (PDF)</h2>
                 </div>
-                <Textarea
-                  value={baseLetter}
-                  onChange={(e) => setBaseLetter(e.target.value)}
-                  placeholder="Paste your base cover letter — your voice, format, and structure will be locked…"
-                  className="min-h-[320px] resize-none text-sm"
-                  disabled={letterLoading}
-                />
-                <p className="mt-2 text-xs text-muted-foreground">{baseLetter.length.toLocaleString()} characters</p>
+                <div
+                  onClick={() => letterFileRef.current?.click()}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    onLetterFile(e.dataTransfer.files?.[0] ?? null);
+                  }}
+                  className="flex min-h-[280px] cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-border bg-secondary/40 p-6 text-center transition-colors hover:border-accent hover:bg-secondary"
+                >
+                  <input
+                    ref={letterFileRef}
+                    type="file"
+                    accept="application/pdf"
+                    className="hidden"
+                    onChange={(e) => onLetterFile(e.target.files?.[0] ?? null)}
+                    disabled={letterLoading}
+                  />
+                  {letterFile ? (
+                    <>
+                      <CheckCircle2 className="h-10 w-10 text-accent" />
+                      <p className="mt-3 text-sm font-medium">{letterFile.name}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {(letterFile.size / 1024).toFixed(0)} KB · click to replace
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="h-10 w-10 text-muted-foreground" />
+                      <p className="mt-3 text-sm font-medium">Drop your cover letter PDF</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Layout, fonts, and margins are preserved. Only keywords swap.
+                      </p>
+                    </>
+                  )}
+                </div>
               </Card>
 
               <Card className="p-6 shadow-elegant">
@@ -360,7 +454,7 @@ const Index = () => {
                   value={letterJd}
                   onChange={(e) => setLetterJd(e.target.value)}
                   placeholder="Paste the target job description…"
-                  className="min-h-[320px] resize-none text-sm"
+                  className="min-h-[280px] resize-none text-sm"
                   disabled={letterLoading}
                 />
                 <p className="mt-2 text-xs text-muted-foreground">{letterJd.length.toLocaleString()} characters</p>
@@ -377,7 +471,7 @@ const Index = () => {
                 {letterLoading ? (
                   <>
                     <Sparkles className="h-4 w-4 animate-pulse" />
-                    Tailoring letter…
+                    Editing PDF in place…
                   </>
                 ) : (
                   <>
@@ -389,21 +483,9 @@ const Index = () => {
               </Button>
             </div>
 
-            {letterLoading && (
-              <Card className="mt-10 animate-pulse p-8">
-                <div className="flex flex-col items-center gap-4">
-                  <div className="h-3 w-48 rounded bg-muted" />
-                  <div className="h-3 w-64 rounded bg-muted" />
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    Locking format · preserving voice · swapping keywords…
-                  </p>
-                </div>
-              </Card>
-            )}
-
             {letterResult && !letterLoading && (
               <Card className="mt-10 p-6 md:p-8 shadow-elegant">
-                <h3 className="text-2xl font-bold">Tailored Cover Letter</h3>
+                <h3 className="text-2xl font-bold">In-Place Edits Applied</h3>
                 {letterResult.company_name && (
                   <p className="mt-1 text-sm text-muted-foreground">For: {letterResult.company_name}</p>
                 )}
@@ -426,26 +508,38 @@ const Index = () => {
                   </div>
                 )}
 
-                <div className="mt-6 rounded-lg border border-border bg-secondary/40 p-5">
-                  <h4 className="mb-3 text-sm font-semibold">Preview</h4>
-                  <div className="space-y-3 text-sm leading-relaxed">
-                    <p>{letterResult.salutation}</p>
-                    {letterResult.paragraphs.map((p, i) => (
-                      <p key={i}>{p}</p>
-                    ))}
-                    <p>{letterResult.sign_off}</p>
-                    {letterResult.signature_name && <p className="font-semibold">{letterResult.signature_name}</p>}
-                  </div>
+                <div className="mt-6 space-y-3">
+                  <h4 className="text-sm font-semibold">Swaps</h4>
+                  {(letterResult.edits || []).length === 0 && (
+                    <p className="text-sm text-muted-foreground">
+                      No safe swaps were identified. Your original PDF is unchanged.
+                    </p>
+                  )}
+                  {(letterResult.edits || []).map((e, i) => (
+                    <div key={i} className="rounded-lg border border-border bg-secondary/40 p-4 text-sm">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive line-through">
+                          {e.find}
+                        </span>
+                        <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                        <span className="rounded bg-accent/15 px-2 py-0.5 text-xs font-medium text-accent-foreground">
+                          {e.replace}
+                        </span>
+                      </div>
+                      {e.reason && <p className="mt-2 text-xs text-muted-foreground">{e.reason}</p>}
+                    </div>
+                  ))}
                 </div>
 
                 <div className="mt-8 flex justify-center">
                   <Button
                     size="lg"
-                    onClick={() => downloadCoverLetterPdf(letterResult)}
+                    onClick={handleDownloadLetter}
+                    disabled={!editedLetterBytes}
                     className="bg-primary text-primary-foreground hover:bg-primary/90"
                   >
                     <Download className="h-4 w-4" />
-                    Download Cover Letter PDF
+                    Download Edited PDF
                   </Button>
                 </div>
               </Card>
