@@ -2,7 +2,7 @@
 import { corsHeaders } from "https://esm.sh/@supabase/supabase-js@2.95.0/cors";
 // pdf parsing in Deno
 // @ts-ignore
-import { getDocument } from "https://esm.sh/pdfjs-serverless@0.5.0";
+import * as pdfjs from "npm:pdfjs-serverless@0.5.0";
 
 const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 
@@ -107,7 +107,7 @@ const tool = {
 };
 
 async function extractPdfText(bytes: Uint8Array): Promise<string> {
-  const doc = await getDocument({ data: bytes, useSystemFonts: true }).promise;
+  const doc = await (pdfjs as any).getDocument({ data: bytes, useSystemFonts: true }).promise;
   let text = "";
   for (let i = 1; i <= doc.numPages; i++) {
     const page = await doc.getPage(i);
