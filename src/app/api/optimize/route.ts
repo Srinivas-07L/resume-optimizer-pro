@@ -31,10 +31,10 @@ export async function POST(req: NextRequest) {
       "keywords_added": []
     }`;
 
-    // Optimized target for PDF processing
-    const target = { ver: "v1beta", mod: "gemini-1.5-flash-latest" };
+    // Optimized target for PDF processing (using the latest available 2.5 Flash model)
+    const target = { ver: "v1beta", mod: "gemini-2.5-flash" };
 
-    let response = await fetch(`https://generativelanguage.googleapis.com/${target.ver}/models/${target.mod}:generateContent?key=${GEMINI_API_KEY}`, {
+    const response = await fetch(`https://generativelanguage.googleapis.com/${target.ver}/models/${target.mod}:generateContent?key=${GEMINI_API_KEY}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -49,18 +49,6 @@ export async function POST(req: NextRequest) {
 
     if (!response.ok) {
       const errorData = await response.json();
-      
-      // If 404, let's list models to see what's available
-      if (response.status === 404) {
-        const listResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${GEMINI_API_KEY}`);
-        const listData = await listResponse.json();
-        const availableModels = listData.models?.map((m: any) => m.name) || [];
-        return NextResponse.json({ 
-          error: `Model Not Found: ${target.mod}. Available models for your key: ${availableModels.join(', ')}`,
-          debug: listData 
-        }, { status: 404 });
-      }
-
       return NextResponse.json({ error: `AI Error (${response.status}): ${JSON.stringify(errorData)}` }, { status: 500 });
     }
 
