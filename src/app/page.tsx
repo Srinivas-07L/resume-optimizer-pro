@@ -99,93 +99,107 @@ export default function Home() {
     
     let y = margin;
 
-    // 1. User's Name (15pt)
+    // --- CENTERED HEADER ---
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(15);
-    doc.setTextColor(0, 0, 0);
-    doc.text(result.name, margin, y);
+    doc.text(result.name, pageWidth / 2, y, { align: 'center' });
+    y += 8;
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.text('Email | Phone | Location | LinkedIn | GitHub', pageWidth / 2, y, { align: 'center' });
     y += 10;
 
-    // 2. Executive Summary (13pt Header, 12pt Body)
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(13);
-    doc.text('Executive Summary', margin, y);
-    y += 7;
+    const addSectionHeader = (title: string) => {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(13);
+      doc.text(title, margin, y);
+      y += 2;
+      doc.setLineWidth(0.5);
+      doc.line(margin, y, pageWidth - margin, y);
+      y += 6;
+    };
 
+    // 1. Executive Summary
+    addSectionHeader('Executive Summary');
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(12);
     const summaryLines = doc.splitTextToSize(result.summary, contentWidth);
     doc.text(summaryLines, margin, y);
-    y += (summaryLines.length * 6) + 10;
+    y += (summaryLines.length * 6) + 6;
 
-    // 3. Technical Skills (13pt Header, 12pt Body)
+    // 2. Technical Skills
     if (result.skills && result.skills.length > 0) {
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(13);
-      doc.text('Technical Skills', margin, y);
-      y += 7;
-
+      addSectionHeader('Technical Skills');
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(12);
+      
       const skillsText = result.skills.join(', ');
       const skillsLines = doc.splitTextToSize(skillsText, contentWidth);
       doc.text(skillsLines, margin, y);
-      y += (skillsLines.length * 6) + 10;
+      y += (skillsLines.length * 6) + 6;
     }
 
-    // 4. Professional Experience (13pt Header, 12pt Body)
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(13);
-    doc.text('Professional Experience', margin, y);
-    y += 8;
-
+    // 3. Professional Experience
+    addSectionHeader('Professional Experience');
     result.experience.forEach((exp: any) => {
-      // Check if we need a new page
-      if (y > 270) {
-        doc.addPage();
-        y = margin;
-      }
+      if (y > 260) { doc.addPage(); y = margin; }
 
+      // Company and Date on the same line
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(12);
-      doc.text(`${exp.role} | ${exp.company}`, margin, y);
+      doc.text(exp.company, margin, y);
+      if (exp.dates) {
+        doc.text(exp.dates, pageWidth - margin, y, { align: 'right' });
+      }
+      y += 5;
+
+      // Role
+      doc.setFont('helvetica', 'bolditalic');
+      doc.text(exp.role, margin, y);
       y += 6;
 
+      // Bullets
       doc.setFont('helvetica', 'normal');
       exp.description.forEach((bullet: string) => {
         const bulletText = `• ${bullet}`;
         const bulletLines = doc.splitTextToSize(bulletText, contentWidth - 5);
-        
-        // Final check for overlap/page break
-        if (y + (bulletLines.length * 6) > 285) {
-          doc.addPage();
-          y = margin;
-        }
-
+        if (y + (bulletLines.length * 6) > 280) { doc.addPage(); y = margin; }
         doc.text(bulletLines, margin + 5, y);
         y += (bulletLines.length * 6);
       });
-      y += 6;
+      y += 4;
     });
 
-    // 5. Education
+    // 4. Education
     if (result.education && result.education.length > 0) {
-      if (y > 260) { doc.addPage(); y = margin; }
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(13);
-      doc.text('Education', margin, y);
-      y += 8;
-
+      if (y > 250) { doc.addPage(); y = margin; }
+      addSectionHeader('Education');
+      
       result.education.forEach((edu: any) => {
-        doc.setFont('helvetica', 'normal');
+        doc.setFont('helvetica', 'bold');
         doc.setFontSize(12);
-        const eduText = typeof edu === 'string' ? edu : `${edu.degree} - ${edu.school}`;
-        doc.text(eduText, margin, y);
-        y += 7;
+        const school = edu.school || edu;
+        doc.text(school, margin, y);
+        if (edu.date || edu.year) {
+          doc.text(edu.date || edu.year, pageWidth - margin, y, { align: 'right' });
+        }
+        y += 5;
+        
+        if (edu.degree) {
+          doc.setFont('helvetica', 'normal');
+          doc.text(edu.degree, margin, y);
+          y += 6;
+        } else {
+          y += 2;
+        }
       });
     }
 
-    doc.save(`${result.name.replace(/\s+/g, '_')}_ATS_Optimized.pdf`);
+    // 5. Awards & Accomplishments
+    // (Assuming they are parsed or can be added if present in result)
+
+    doc.save(`${result.name.replace(/\s+/g, '_')}_Final_Optimized.pdf`);
   };
 
   return (
