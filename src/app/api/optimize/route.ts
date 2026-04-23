@@ -37,44 +37,44 @@ export async function POST(req: NextRequest) {
       "keywords_added": []
     }`;
 
-    // Optimized target for PDF processing (using the latest available 2.5 Flash model)
-    const target = { ver: "v1beta", mod: "gemini-2.5-flash" };
+    // Use Gemini 2.0 Flash which is more stable than the 2.5 preview
+    const models = ["gemini-2.0-flash", "gemini-flash-latest"];
+    let lastError = "";
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/${target.ver}/models/${target.mod}:generateContent?key=${GEMINI_API_KEY}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{
-          parts: [
-            { text: prompt }, 
-            { inline_data: { mime_type: 'application/pdf', data: b64 } }
-          ]
-        }]
-      })
-    });
+    for (const modelName of models) {
+      try {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${GEMINI_API_KEY}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{
+              parts: [
+                { text: prompt }, 
+                { inline_data: { mime_type: 'application/pdf', data: b64 } }
+              ]
+            }]
+          })
+        });
 
-    const responseText = await response.text();
-    if (!response.ok) {
-      return NextResponse.json({ error: `AI Error (${response.status}): ${responseText}` }, { status: 500 });
+        const responseText = await response.text();
+        if (!response.ok) {
+          lastError = `Model ${modelName} failed (${response.status}): ${responseText}`;
+          continue; // Try next model
+        }
+
+        const successData = JSON.parse(responseText);
+        let text = successData.candidates?.[0]?.content?.parts?.[0]?.text || "";
+        text = text.replace(/```json/g, "").replace(/```/g, "").trim();
+        
+        return NextResponse.json(JSON.parse(text));
+
+      } catch (e: any) {
+        lastError = e.message;
+        continue;
+      }
     }
 
-    let successData;
-    try {
-      successData = JSON.parse(responseText);
-    } catch (e) {
-      return NextResponse.json({ error: `Invalid JSON from AI: ${responseText.substring(0, 100)}` }, { status: 500 });
-    }
-
-    let text = successData.candidates?.[0]?.content?.parts?.[0]?.text || "";
-    // Clean up any markdown code blocks
-    text = text.replace(/```json/g, "").replace(/```/g, "").trim();
-
-    try {
-      const parsed = JSON.parse(text);
-      return NextResponse.json(parsed);
-    } catch (e) {
-      return NextResponse.json({ error: `AI returned invalid schema: ${text.substring(0, 100)}` }, { status: 500 });
-    }
+    return NextResponse.json({ error: `All models failed. Last error: ${lastError}` }, { status: 500 });
 
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
