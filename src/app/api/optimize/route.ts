@@ -24,25 +24,34 @@ export async function POST(req: NextRequest) {
     }
     const b64 = btoa(binary);
 
-    const prompt = `You are an expert ATS optimizer. Review the resume PDF and this JD: "${jd}".
-    
-    TECHNICAL CONSTRAINTS:
-    1. Standard Headers Only: Use ONLY: 'Executive Summary', 'Technical Skills', 'Professional Experience', 'Education', and 'Awards & Accomplishments'.
-    2. Linear Flow: No sidebars, no tables, no overlapping elements.
-    3. Keyword Mirroring: Extract technical nouns from the JD and ensure they appear EXACTLY as written. If JD uses acronyms, use both: 'Full Term (Acronym)'.
-    4. Removal of Noise: No photos, icons, progress bars, or tables.
-    5. One-Page Ruthlessness: Be extremely concise with bullet points to ensure a single-page fit.
-    
-    Return ONLY a raw JSON object. SCHEMA:
+    const prompt = `You are an ELITE Resume Engineer. Your goal is to re-write this resume to achieve a 95%+ ATS match for this Job Description: "${jd}".
+
+    CRITICAL EXTRACTION:
+    - Extract the user's FULL NAME, EMAIL, PHONE, LINKEDIN, and GITHUB from the provided resume PDF. 
+    - If any link/detail is missing, leave it as an empty string.
+
+    RE-WRITING RULES (FOR 95%+ ATS SCORE):
+    1. KEYWORD MIRRORING: Identify all technical nouns (tools, software, methods) in the JD. Ensure they appear EXACTLY as written in the JD. If JD uses acronyms, use 'Full Term (Acronym)'.
+    2. RUTHLESS CONCISCENESS: Re-write every experience bullet to be short, punchy, and result-oriented. Ensure it fits on 1 page.
+    3. STRUCTURE: Use only these headers: 'Executive Summary', 'Technical Skills', 'Professional Experience', 'Education', 'Awards & Accomplishments'.
+    4. NO NOISE: Remove photos, icons, and progress bars. Focus on searchable UTF-8 text.
+
+    Return ONLY a raw JSON object. 
+    SCHEMA:
     {
-      "name": "Full Name",
-      "summary": "Impactful Executive Summary",
-      "experience": [{"role": "Role", "company": "Company", "dates": "Dates", "description": ["ruthlessly concise bullets"]}],
+      "name": "Extracted Full Name",
+      "email": "Extracted Email",
+      "phone": "Extracted Phone",
+      "linkedin": "Extracted LinkedIn URL",
+      "github": "Extracted GitHub URL",
+      "location": "Extracted City/State",
+      "summary": "3-4 line summary connecting skills to the role requirements",
+      "experience": [{"role": "Role", "company": "Company", "dates": "Dates", "description": ["3-5 optimized bullets"]}],
       "education": [{"degree": "Degree", "school": "School", "date": "Date"}],
-      "skills": ["Keyword1", "Keyword2"],
+      "skills": ["Keyword1", "Keyword2", "Exactly matching JD"],
       "match_score_before": 0,
-      "match_score_after": 100,
-      "keywords_added": []
+      "match_score_after": 98,
+      "keywords_added": ["List of JD keywords synced"]
     }`;
 
     // Use Gemini 2.0 Flash which is more stable than the 2.5 preview

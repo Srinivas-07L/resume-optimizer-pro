@@ -102,13 +102,32 @@ export default function Home() {
     // --- CENTERED HEADER ---
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(15);
-    doc.text(result.name, pageWidth / 2, y, { align: 'center' });
-    y += 8;
+    doc.text(result.name || 'Full Name', pageWidth / 2, y, { align: 'center' });
+    y += 7;
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
-    doc.text('Email | Phone | Location | LinkedIn | GitHub', pageWidth / 2, y, { align: 'center' });
-    y += 10;
+    
+    const contactInfo = [
+      result.email,
+      result.phone,
+      result.location
+    ].filter(Boolean).join(' | ');
+    
+    doc.text(contactInfo, pageWidth / 2, y, { align: 'center' });
+    y += 5;
+
+    const links = [
+      result.linkedin,
+      result.github
+    ].filter(Boolean).join(' | ');
+
+    if (links) {
+      doc.text(links, pageWidth / 2, y, { align: 'center' });
+      y += 10;
+    } else {
+      y += 5;
+    }
 
     const addSectionHeader = (title: string) => {
       doc.setFont('helvetica', 'bold');
