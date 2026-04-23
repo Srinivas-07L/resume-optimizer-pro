@@ -93,36 +93,99 @@ export default function Home() {
   const downloadPdf = () => {
     if (!result) return;
     const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 20;
+    const contentWidth = pageWidth - (margin * 2);
     
-    doc.setFontSize(22);
-    doc.setTextColor(30, 41, 59);
-    doc.text(result.name, 20, 20);
-    
-    doc.setFontSize(10);
-    doc.setTextColor(71, 85, 105);
-    doc.text(result.summary, 20, 30, { maxWidth: 170 });
-    
-    let y = 60;
-    doc.setFontSize(14);
-    doc.setTextColor(30, 41, 59);
-    doc.text('Professional Experience', 20, y);
+    let y = margin;
+
+    // 1. User's Name (15pt)
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(15);
+    doc.setTextColor(0, 0, 0);
+    doc.text(result.name, margin, y);
     y += 10;
-    
+
+    // 2. Executive Summary (13pt Header, 12pt Body)
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(13);
+    doc.text('Executive Summary', margin, y);
+    y += 7;
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(12);
+    const summaryLines = doc.splitTextToSize(result.summary, contentWidth);
+    doc.text(summaryLines, margin, y);
+    y += (summaryLines.length * 6) + 10;
+
+    // 3. Technical Skills (13pt Header, 12pt Body)
+    if (result.skills && result.skills.length > 0) {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(13);
+      doc.text('Technical Skills', margin, y);
+      y += 7;
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(12);
+      const skillsText = result.skills.join(', ');
+      const skillsLines = doc.splitTextToSize(skillsText, contentWidth);
+      doc.text(skillsLines, margin, y);
+      y += (skillsLines.length * 6) + 10;
+    }
+
+    // 4. Professional Experience (13pt Header, 12pt Body)
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(13);
+    doc.text('Professional Experience', margin, y);
+    y += 8;
+
     result.experience.forEach((exp: any) => {
-      doc.setFontSize(11);
-      doc.setTextColor(51, 65, 85);
-      doc.text(`${exp.role} | ${exp.company}`, 20, y);
-      y += 5;
-      doc.setFontSize(9);
-      doc.setTextColor(71, 85, 105);
+      // Check if we need a new page
+      if (y > 270) {
+        doc.addPage();
+        y = margin;
+      }
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(12);
+      doc.text(`${exp.role} | ${exp.company}`, margin, y);
+      y += 6;
+
+      doc.setFont('helvetica', 'normal');
       exp.description.forEach((bullet: string) => {
-        doc.text(`• ${bullet}`, 25, y, { maxWidth: 160 });
-        y += 5;
+        const bulletText = `• ${bullet}`;
+        const bulletLines = doc.splitTextToSize(bulletText, contentWidth - 5);
+        
+        // Final check for overlap/page break
+        if (y + (bulletLines.length * 6) > 285) {
+          doc.addPage();
+          y = margin;
+        }
+
+        doc.text(bulletLines, margin + 5, y);
+        y += (bulletLines.length * 6);
       });
-      y += 5;
+      y += 6;
     });
 
-    doc.save(`${result.name.replace(/\s+/g, '_')}_Optimized.pdf`);
+    // 5. Education
+    if (result.education && result.education.length > 0) {
+      if (y > 260) { doc.addPage(); y = margin; }
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(13);
+      doc.text('Education', margin, y);
+      y += 8;
+
+      result.education.forEach((edu: any) => {
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(12);
+        const eduText = typeof edu === 'string' ? edu : `${edu.degree} - ${edu.school}`;
+        doc.text(eduText, margin, y);
+        y += 7;
+      });
+    }
+
+    doc.save(`${result.name.replace(/\s+/g, '_')}_ATS_Optimized.pdf`);
   };
 
   return (

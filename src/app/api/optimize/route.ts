@@ -25,13 +25,21 @@ export async function POST(req: NextRequest) {
     const b64 = btoa(binary);
 
     const prompt = `You are an expert ATS optimizer. Review the resume PDF and this JD: "${jd}".
+    
+    TECHNICAL CONSTRAINTS:
+    1. Standard Headers Only: Use ONLY: 'Executive Summary', 'Technical Skills', 'Professional Experience', 'Education', and 'Awards & Accomplishments'.
+    2. Linear Flow: No sidebars, no tables, no overlapping elements.
+    3. Keyword Mirroring: Extract technical nouns from the JD and ensure they appear EXACTLY as written. If JD uses acronyms, use both: 'Full Term (Acronym)'.
+    4. Removal of Noise: No photos, icons, progress bars, or tables.
+    5. One-Page Ruthlessness: Be extremely concise with bullet points to ensure a single-page fit.
+    
     Return ONLY a raw JSON object. SCHEMA:
     {
-      "name": "Name",
-      "summary": "Summary",
-      "experience": [{"role": "Role", "company": "Company", "dates": "Dates", "description": ["bullets"]}],
-      "education": [],
-      "skills": [],
+      "name": "Full Name",
+      "summary": "Impactful Executive Summary",
+      "experience": [{"role": "Role", "company": "Company", "dates": "Dates", "description": ["ruthlessly concise bullets"]}],
+      "education": [{"degree": "Degree", "school": "School", "date": "Date"}],
+      "skills": ["Keyword1", "Keyword2"],
       "match_score_before": 0,
       "match_score_after": 100,
       "keywords_added": []
