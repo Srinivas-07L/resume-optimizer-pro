@@ -25,6 +25,11 @@ function cn(...inputs: ClassValue[]) {
 
 interface ResumeResult {
   name: string;
+  email?: string;
+  phone?: string;
+  linkedin?: string;
+  github?: string;
+  location?: string;
   summary: string;
   experience: any[];
   education: any[];
