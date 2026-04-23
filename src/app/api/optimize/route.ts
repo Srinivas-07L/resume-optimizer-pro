@@ -16,7 +16,13 @@ export async function POST(req: NextRequest) {
     if (!jd || !file) return NextResponse.json({ error: 'Missing JD or Resume' }, { status: 400 });
 
     const arrayBuffer = await file.arrayBuffer();
-    const b64 = btoa(Array.from(new Uint8Array(arrayBuffer)).map(b => String.fromCharCode(b)).join(''));
+    const bytes = new Uint8Array(arrayBuffer);
+    let binary = '';
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    const b64 = btoa(binary);
 
     const prompt = `You are an expert ATS optimizer. Review the resume PDF and this JD: "${jd}".
     Return ONLY a raw JSON object. SCHEMA:
@@ -47,18 +53,28 @@ export async function POST(req: NextRequest) {
       })
     });
 
+    const responseText = await response.text();
     if (!response.ok) {
-      const errorData = await response.json();
-      return NextResponse.json({ error: `AI Error (${response.status}): ${JSON.stringify(errorData)}` }, { status: 500 });
+      return NextResponse.json({ error: `AI Error (${response.status}): ${responseText}` }, { status: 500 });
     }
 
-    const successData = await response.json();
+    let successData;
+    try {
+      successData = JSON.parse(responseText);
+    } catch (e) {
+      return NextResponse.json({ error: `Invalid JSON from AI: ${responseText.substring(0, 100)}` }, { status: 500 });
+    }
 
     let text = successData.candidates?.[0]?.content?.parts?.[0]?.text || "";
     // Clean up any markdown code blocks
     text = text.replace(/```json/g, "").replace(/```/g, "").trim();
 
-    return NextResponse.json(JSON.parse(text));
+    try {
+      const parsed = JSON.parse(text);
+      return NextResponse.json(parsed);
+    } catch (e) {
+      return NextResponse.json({ error: `AI returned invalid schema: ${text.substring(0, 100)}` }, { status: 500 });
+    }
 
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
