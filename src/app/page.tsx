@@ -69,7 +69,14 @@ export default function Home() {
         body: formData,
       });
 
-      const data = await response.json();
+      const responseText = await response.text();
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (e) {
+        throw new Error(`Server returned non-JSON response: ${responseText.substring(0, 100)}`);
+      }
+
       if (!response.ok) throw new Error(data.error || 'Optimization failed');
 
       setResult(data);
