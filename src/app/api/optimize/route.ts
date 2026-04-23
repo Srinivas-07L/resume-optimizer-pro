@@ -31,34 +31,28 @@ export async function POST(req: NextRequest) {
       "keywords_added": []
     }`;
 
-    // Target multiple versions but with NO problematic mime_type fields
-    const targets = [
-      { ver: "v1beta", mod: "gemini-1.5-flash" },
-      { ver: "v1", mod: "gemini-1.5-flash" }
-    ];
+    // Optimized target for PDF processing
+    const target = { ver: "v1beta", mod: "gemini-1.5-flash-latest" };
 
-    let lastError = "";
-    let successData = null;
+    const response = await fetch(`https://generativelanguage.googleapis.com/${target.ver}/models/${target.mod}:generateContent?key=${GEMINI_API_KEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            { text: prompt }, 
+            { inline_data: { mime_type: 'application/pdf', data: b64 } }
+          ]
+        }]
+      })
+    });
 
-    for (const target of targets) {
-      const response = await fetch(`https://generativelanguage.googleapis.com/${target.ver}/models/${target.mod}:generateContent?key=${GEMINI_API_KEY}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{
-            parts: [{ text: prompt }, { inline_data: { mime_type: 'application/pdf', data: b64 } }]
-          }]
-        })
-      });
-
-      if (response.ok) {
-        successData = await response.json();
-        break;
-      }
-      lastError = await response.text();
+    if (!response.ok) {
+      const errorText = await response.text();
+      return NextResponse.json({ error: `AI Error (${response.status}): ${errorText}` }, { status: 500 });
     }
 
-    if (!successData) return NextResponse.json({ error: `AI Error: ${lastError}` }, { status: 500 });
+    const successData = await response.json();
 
     let text = successData.candidates?.[0]?.content?.parts?.[0]?.text || "";
     // Clean up any markdown code blocks
